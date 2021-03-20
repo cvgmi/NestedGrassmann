@@ -21,8 +21,8 @@ Following the convention of pymanopt, $N$ points on $\text{Gr}(p,n)$ are
 represented as an $(N,n,p)$ numpy array. The function `DR_proj` takes an $(N, n,
 p)$ numpy array and an integer $m < n$ as inputs and projects the $N$ points on
 $\text{Gr}(p, n)$ to $\text{Gr}(p, m)$. The outputs are the ratio of explained
-variance, the projected pointe $\hat{X}$ which is a $(N, m ,p)$ numpy array, and
-the projection parameters $A$ and $B$. 
+variance, the projected points $\hat{X}$ which is an $(N, m ,p)$ numpy array,
+and the projection parameters $A$ and $B$. 
 
 An example can be found in `example.ipynb`.
 
