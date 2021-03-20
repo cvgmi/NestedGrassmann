@@ -24,5 +24,5 @@ $\text{Gr}(p, n)$ to $\text{Gr}(p, m)$. The outputs are the ratio of explained
 variance, the projected pointe $\hat{X}$ which is a $(N, m ,p)$ numpy array, and
 the projection parameters $A$ and $B$. 
 
-An example can be found in `example.ipynb'.
+An example can be found in `example.ipynb`.
 
