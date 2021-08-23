@@ -3,6 +3,10 @@ import pymanopt
 from pymanopt.solvers.solver import Solver
 from pymanopt.solvers.steepest_descent import SteepestDescent
 
+"""
+reference: https://github.com/pymanopt/pymanopt/blob/master/pymanopt/solvers/nelder_mead.py
+"""
+
 def compute_centroid(manifold, points):
     """Compute the centroid of `points` on the `manifold` as Karcher mean."""
     num_points = len(points)

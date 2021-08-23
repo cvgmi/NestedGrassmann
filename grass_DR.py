@@ -81,33 +81,36 @@ def DR_proj_complex(X, m, verbosity=0, *args, **kwargs):
     
     Cgr = ComplexGrassmann(m, p)
     Cgr_map = ComplexGrassmann(n, m)
-    XXT = multiprod(X, multihconj(X)) # N x n x n
-    meanXXT = np.mean(XXT, axis = 0) # n x n
+    man = Product([ComplexGrassmann(n, m), Euclidean(n, p, 2)])
+    X_ = torch.from_numpy(X)
     
     @pymanopt.function.PyTorch
-    def cost(theta):
-        A = theta[0] # n x m
-        B = theta[1] # n x p
-        AAT = np.matmul(A, multihconj(A)) # n x n
-        IAATB = np.matmul(np.eye(n) - AAT, B) # n x p
+    def cost(A, B):
+        AAT = torch.matmul(A, A.conj().t()) # n x n
+        B_cpx = B[:,:,0] + B[:,:,1]*1j
+        IAATB = torch.matmul(torch.eye(n, dtype=torch.complex128) - AAT, B_cpx) # n x p
         d2 = 0
         for i in range(N):
-            d2 = d2 + dist_proj(X[i], np.matmul(AAT, X[i]) + IAATB)**2
-        return d2.real
+            d2 = d2 + dist_proj(X_[i], torch.matmul(AAT, X_[i]) + IAATB)**2/N
+        return d2
     
 
-    solver = SteepestDescent(*args, **kwargs)
-    problem = Problem(manifold=Cgr_map, cost=cost, egrad=egrad, verbosity=verbosity)
-    Q_proj = solver.solve(problem) # n x m
-
-    tmp = np.array([multihconj(Q_proj) for i in range(N)]) # N x m x n
+    solver = ConjugateGradient()
+    problem = Problem(manifold=man, cost=cost, verbosity=verbosity)
+    theta = solver.solve(problem)
+    A = theta[0]
+    B = theta[1]
+    B_cpx = B[:,:,0] + B[:,:,1]*1j
+    
+    tmp = np.array([multihconj(A) for i in range(N)]) # N x m x n
     X_low = multiprod(tmp, X) # N x m x p
-    X_low = X_low/np.expand_dims(np.linalg.norm(X_low, axis=1), axis = 2)
+    #X_low = X_low/np.expand_dims(np.linalg.norm(X_low, axis=1), axis = 2)
+    X_low = np.array([qr(X_low[i])[0] for i in range(N)])
 
     M_hat = compute_centroid(Cgr, X_low)
     v_hat = var(Cgr, X_low, M_hat)/N
     var_ratio = v_hat/v
-    return var_ratio, X_low, Q_proj
+    return var_ratio, X_low, A, B_cpx
 
 def DR_supervised_proj_complex(X, m, verbosity=0, *args, **kwargs):
     """
