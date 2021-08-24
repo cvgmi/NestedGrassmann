@@ -84,12 +84,13 @@ class SPCA(BaseEstimator, TransformerMixin):
         indices = self._lambdas.argsort()[::-1]
         
         self._lambdas = self._lambdas[indices]
-        self._lambdas = self._lambdas[self._lambdas > 0]  # selecting values only for non zero eigen values
+        ind2 = self._lambdas > 0
+        self._lambdas = self._lambdas[ind2]  # selecting values only for non zero eigen values
         
         self.explained_variance_ratio_ = self._lambdas/np.trace(Q)
         
         self._alphas = self._alphas[:, indices]
-        self._alphas = self._alphas[:, self._lambdas > 0]  # selecting values only for non zero eigen values
+        self._alphas = self._alphas[:, ind2]  # selecting values only for non zero eigen values
         
         self.X_fit = X
 

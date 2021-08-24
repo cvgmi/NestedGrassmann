@@ -20,11 +20,15 @@ def var(man, X, M):
     return d
 
 def dist_proj(X, Y):
-    Px = torch.matmul(X, torch.matmul(torch.inverse(torch.matmul(X.t(), X)), X.t()))
-    Py = torch.matmul(Y, torch.matmul(torch.inverse(torch.matmul(Y.t(), Y)), Y.t()))
-    return torch.norm(Px - Py)/np.sqrt(2)
+    Px = torch.matmul(X, torch.matmul(torch.inverse(torch.matmul(X.conj().t(), X)), X.conj().t()))
+    Py = torch.matmul(Y, torch.matmul(torch.inverse(torch.matmul(Y.conj().t(), Y)), Y.conj().t()))
+    if torch.is_complex(X) or torch.is_complex(Y):
+        P = Px - Py
+        return torch.sqrt(torch.sum(torch.matmul(P,P.conj().t()))).real/np.sqrt(2)
+    else:
+        return torch.norm(Px - Py)/np.sqrt(2)
 
-def DR_proj(X, m, verbosity=0, *args, **kwargs):
+def NG_dr(X, m, verbosity=0, *args, **kwargs):
     """
     X: array of N points on Gr(n, p); N x n x p array
     aim to represent X by X_hat (N points on Gr(m, p), m < n) 
@@ -32,87 +36,49 @@ def DR_proj(X, m, verbosity=0, *args, **kwargs):
     minimizing the projection error (using projection F-norm)
     """
     N, n, p = X.shape
-    
-    gr = Grassmann(n, p)
-    FM_all = compute_centroid(gr, X)
-    v = var(gr, X, FM_all)/N
-    
-    gr = Grassmann(m, p)
-    gr_map = Grassmann(n, m)
-    man = Product([Grassmann(n, m), Euclidean(n, p)])
-    X_ = torch.from_numpy(X)
-    
-    @pymanopt.function.PyTorch
-    def cost(A, B):
-        AAT = torch.matmul(A, A.t()) # n x n
-        IAATB = torch.matmul(torch.eye(n) - AAT, B) # n x p
-        d2 = 0
-        for i in range(N):
-            d2 = d2 + dist_proj(X_[i], torch.matmul(AAT, X_[i]) + IAATB)**2/N
-        return d2
+    cpx = np.iscomplex(X).any() # true if X is complex-valued
 
-    solver = ConjugateGradient()
-    problem = Problem(manifold=man, cost=cost, verbosity=verbosity)
-    theta = solver.solve(problem)
-    A = theta[0]
-    B = theta[1]
-
-    tmp1 = np.array([A.T for i in range(N)])
-    X_low = multiprod(tmp1, X)
-    X_low = np.array([qr(X_low[i])[0] for i in range(N)])
-
-    M_hat = compute_centroid(gr, X_low)
-    v_hat = var(gr, X_low, M_hat)/N
-    var_ratio = v_hat/v
-    return var_ratio, X_low, A, B
-
-def DR_proj_complex(X, m, verbosity=0, *args, **kwargs):
-    """
-    X: array of N points on complex Gr(n, p); N x n x p array
-    aim to represent X by X_hat (N points on Gr(m, p), m < n) 
-    where X_hat_i = A^T X_i - A^T B, A \in St(n, m), and B \in R^(n x p)
-    minimizing the projection error (using projection F-norm)
-    """
-    N, n, p = X.shape
+    if cpx:
+        man = Product([ComplexGrassmann(n, m), Euclidean(n, p, 2)])
         
-    Cgr = ComplexGrassmann(n, p)
-    FM_all = compute_centroid(Cgr, X)
-    v = var(Cgr, X, FM_all)/N
+    else:
+        man = Product([Grassmann(n, m), Euclidean(n, p)])
     
-    Cgr = ComplexGrassmann(m, p)
-    Cgr_map = ComplexGrassmann(n, m)
-    man = Product([ComplexGrassmann(n, m), Euclidean(n, p, 2)])
     X_ = torch.from_numpy(X)
     
     @pymanopt.function.PyTorch
     def cost(A, B):
         AAT = torch.matmul(A, A.conj().t()) # n x n
-        B_cpx = B[:,:,0] + B[:,:,1]*1j
-        IAATB = torch.matmul(torch.eye(n, dtype=torch.complex128) - AAT, B_cpx) # n x p
+        if cpx:
+            B_ = B[:,:,0] + B[:,:,1]*1j
+        else:
+            B_ = B
+        IAATB = torch.matmul(torch.eye(n, dtype=X_.dtype) - AAT, B_) # n x p
         d2 = 0
         for i in range(N):
             d2 = d2 + dist_proj(X_[i], torch.matmul(AAT, X_[i]) + IAATB)**2/N
         return d2
-    
 
     solver = ConjugateGradient()
     problem = Problem(manifold=man, cost=cost, verbosity=verbosity)
     theta = solver.solve(problem)
     A = theta[0]
     B = theta[1]
-    B_cpx = B[:,:,0] + B[:,:,1]*1j
     
-    tmp = np.array([multihconj(A) for i in range(N)]) # N x m x n
-    X_low = multiprod(tmp, X) # N x m x p
-    #X_low = X_low/np.expand_dims(np.linalg.norm(X_low, axis=1), axis = 2)
+    if cpx:
+        B_ = B[:,:,0] + B[:,:,1]*1j
+    else:
+        B_ = B
+
+    #tmp = np.array([A.T for i in range(N)])
+    tmp = np.array([A.conj().T for i in range(N)])
+    X_low = multiprod(tmp, X)
     X_low = np.array([qr(X_low[i])[0] for i in range(N)])
 
-    M_hat = compute_centroid(Cgr, X_low)
-    v_hat = var(Cgr, X_low, M_hat)/N
-    var_ratio = v_hat/v
-    return var_ratio, X_low, A, B_cpx
+    return X_low, A, B_
 
-def DR_supervised_proj_complex(X, m, verbosity=0, *args, **kwargs):
+
+def NG_sdr(X, y, m, v_w = 5, v_b = 5, verbosity=0, *args, **kwargs):
     """
     X: array of N points on complex Gr(n, p); N x n x p array
     aim to represent X by X_hat (N points on Gr(m, p), m < n) 
@@ -120,40 +86,61 @@ def DR_supervised_proj_complex(X, m, verbosity=0, *args, **kwargs):
     minimizing the projection error (using projection F-norm)
     """
     N, n, p = X.shape
-        
-    Cgr = ComplexGrassmann(n, p)
-    FM_all = compute_centroid(Cgr, X)
-    v = var(Cgr, X, FM_all)/N
+    cpx = np.iscomplex(X).any() # true if X is complex-valued
+    if cpx:
+        gr = ComplexGrassmann(n, p)
+        man = ComplexGrassmann(n, m)
+    else:
+        gr = Grassmann(n, p)
+        man = Grassmann(n, m)
     
-    Cgr = ComplexGrassmann(m, p)
-    Cgr_map = ComplexGrassmann(n, m)
-    XXT = multiprod(X, multihconj(X)) # N x n x n
-    meanXXT = np.mean(XXT, axis = 0) # n x n
+    # distance matrix
+    dist_m = np.zeros((N, N))
+
+    for i in range(N):
+        for j in range(i):
+            dist_m[i, j] = gr.dist(X[i], X[j])
+            dist_m[j, i] = dist_m[i, j]
     
-    @pymanopt.function.Callable
-    def cost(Q):
-        QQ = np.matmul(Q, multihconj(Q)) # n x n
-        d2 = p - np.trace(np.matmul(meanXXT, QQ))
-        return d2.real
+    # affinity matrix
+    affinity = np.eye(N)
+
+    for i in range(N):
+        for j in range(i):
+            tmp1 = np.argsort(dist_m[i, y == y[i]])[v_w]
+            tmp2 = np.argsort(dist_m[j, y == y[j]])[v_w]
+            g_w = np.int((y[i] == y[j]) and (dist_m[i, j] < np.maximum(tmp1, tmp2)))
+            tmp1 = np.argsort(dist_m[i, y != y[i]])[v_b-1]
+            tmp2 = np.argsort(dist_m[j, y != y[j]])[v_b-1]
+            g_b = np.int((y[i] != y[j]) and (dist_m[i, j] < np.maximum(tmp1, tmp2)))
+            affinity[i, j] = g_w - g_b
+            affinity[j, i] = affinity[i, j]
+            
+    X_ = torch.from_numpy(X)
+    affinity_ = torch.from_numpy(affinity)
     
-    @pymanopt.function.Callable
-    def egrad(Q):
-        eg = -2  * np.matmul(meanXXT, Q)
-        return eg
+    @pymanopt.function.PyTorch
+    def cost(A):
+        dm = torch.zeros((N, N))
+        for i in range(N):
+            for j in range(i):
+                dm[i, j] = dist_proj(torch.matmul(A.conj().t(), X_[i]), torch.matmul(A.conj().t(), X_[j]))**2
+                #dm[i, j] = gr_low.dist(X_proj[i], X_proj[j])**2
+                dm[j, i] = dm[i, j]
+    
+        d2 = torch.mean(affinity_*dm)   
+        return d2
 
     # solver = ConjugateGradient()
-    solver = SteepestDescent(*args, **kwargs)
-    problem = Problem(manifold=Cgr_map, cost=cost, egrad=egrad, verbosity=verbosity)
-    Q_proj = solver.solve(problem) # n x m
+    solver = ConjugateGradient()
+    problem = Problem(manifold=man, cost=cost, verbosity=verbosity)
+    A = solver.solve(problem)
 
-    tmp = np.array([multihconj(Q_proj) for i in range(N)]) # N x m x n
+    tmp = np.array([A.conj().T for i in range(N)]) # N x m x n
     X_low = multiprod(tmp, X) # N x m x p
-    X_low = X_low/np.expand_dims(np.linalg.norm(X_low, axis=1), axis = 2)
-
-    M_hat = compute_centroid(Cgr, X_low)
-    v_hat = var(Cgr, X_low, M_hat)/N
-    var_ratio = v_hat/v
-    return var_ratio, X_low, Q_proj
+    X_low = np.array([qr(X_low[i])[0] for i in range(N)])
+    
+    return X_low, A
 
 
 

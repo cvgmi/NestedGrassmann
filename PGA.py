@@ -22,8 +22,9 @@ def PGA(X, m, man):
     for i in range(n):
         X_trans[i] = man.exp(FM, logX_trans[i])
 
-    var_ratio = np.sum(pca.explained_variance_ratio_)
-    return var_ratio, X_trans
+    #var_ratio = np.sum(pca.explained_variance_ratio_)
+    #return var_ratio, X_trans
+    return pca
 
 def sPGA(X, y, m, man):
     """
