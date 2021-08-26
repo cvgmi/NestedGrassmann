@@ -1,3 +1,5 @@
 __pycache__
 .gitignore
 .ipynb_checkpoints
+.DS_Store
+dataset/.Rhistory

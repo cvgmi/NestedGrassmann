@@ -7,16 +7,9 @@ from compute_centroid import *
 from grass_DR import *
 from sklearn.decomposition import PCA
 
-def ortho_complement(A):
-    # A is a n x p real- or complex-valued matrix such that A^HA = I, p < n
-    # return an n x (n-p) matrix A_perp such that [A A_perp] is orthogonal
-    n, p = A.shape
-    A_ext = np.eye(n)[:,0:p]
-    tmp = np.hstack((A, A_ext))
-    q, _ = np.linalg.qr(tmp)
-    return(q[:,p:n])
 
-def PNG(X, log=True):
+
+def PNG(X, log=True, verbosity = 1):
     # Assuming X consists of N points on Gr(p, n), p < n
     # options:
     #     log: print projection info
@@ -33,11 +26,14 @@ def PNG(X, log=True):
         if log:
             print(f'Gr({p}, {i+1}) -> Gr({p}, {i})')
         
-        X_new, A, B = NG_dr(X_old, i)    
-        A_perp = ortho_complement(A)[:,0]
+        #X_new, A, B = NG_dr(X_old, i, verbosity) 
+        X_new, A, A_perp, b = NG_dr1(X_old, verbosity) 
+        #A_perp = ortho_complement(A)[:,0]
         AAT = np.matmul(A, A.conj().T) 
-        IAATB = np.matmul(np.eye(X_old.shape[1]) - AAT, B)
-        X_new_embedded = np.array([np.linalg.qr(np.matmul(A, X_new[i]) + IAATB)[0] for i in range(N)])
+        #IAATB = np.matmul(np.eye(X_old.shape[1]) - AAT, B)
+        A_perpBT = np.matmul(A_perp, b.T)
+        #X_new_embedded = np.array([np.linalg.qr(np.matmul(A, X_new[i]) + IAATB)[0] for i in range(N)])
+        X_new_embedded = np.array([np.linalg.qr(np.matmul(A, X_new[i]) + A_perpBT)[0] for i in range(N)])
             
         # compute scores
         if cpx:
@@ -67,11 +63,14 @@ def PNG(X, log=True):
             if log:
                 print(f'Gr(1, {i+1}) -> Gr(1, {i})')   
 
-            X_new, A, B = NG_dr(X_old, i)
-            A_perp = ortho_complement(A)[:,0]
+            #X_new, A, B = NG_dr(X_old, i, verbosity)
+            X_new, A, A_perp, b = NG_dr1(X_old, verbosity)
+            #A_perp = ortho_complement(A)[:,0]
             AAT = np.matmul(A, A.conj().T) 
-            IAATB = np.matmul(np.eye(X_old.shape[1]) - AAT, B)
-            X_new_embedded = np.array([np.linalg.qr(np.matmul(A, X_new[i]) + IAATB)[0] for i in range(N)])
+            #IAATB = np.matmul(np.eye(X_old.shape[1]) - AAT, B)
+            A_perpBT = np.matmul(A_perp, b.T)
+            #X_new_embedded = np.array([np.linalg.qr(np.matmul(A, X_new[i]) + IAATB)[0] for i in range(N)])
+            X_new_embedded = np.array([np.linalg.qr(np.matmul(A, X_new[i]) + A_perpBT)[0] for i in range(N)])
 
             # compute scores
             if cpx:              

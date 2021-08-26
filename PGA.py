@@ -2,6 +2,7 @@ from compute_centroid import *
 import numpy as np
 from sklearn.decomposition import PCA
 from sPCA import *
+from Complex_PCA import *
 
 def PGA(X, m, man):
     """
@@ -48,7 +49,7 @@ def sPGA(X, y, m, man):
     var_ratio = np.sum(spca.explained_variance_ratio_)
     return var_ratio, X_trans
 
-def PGA_complex(X, m, man):
+def Complex_PGA(X, m, man):
     """
     tangent PCA for complex manifolds
     """
@@ -58,22 +59,19 @@ def PGA_complex(X, m, man):
     logX = logX.reshape((n, -1))
     for i in range(n):
         logX[i] = man.log(FM, X[i]).reshape(-1)
-
-    logX_mean = X.mean(axis=0).reshape(-1)
-    logX_center = logX
-    for i in range(n):
-        logX_center[i] = logX[i] - logX_mean
-    _, stds, pcs = np.linalg.svd(logX_center/np.sqrt(n))
+        
+    cpca = Complex_PCA(n_components=m)
+    cpca.fit(logX)
+    #logX_trans = cpca.inverse_transform(logX_trans)
+    #logX_trans = logX_trans.reshape(X.shape)
     
-    logX_trans = np.matmul(np.matmul(logX, pcs[0:m].T), pcs[0:m])
-    logX_trans = logX_trans.reshape(X.shape)
+    #X_trans = np.zeros(X.shape, dtype = X.dtype)
+    #for i in range(n):
+    #    X_trans[i] = man.exp(FM, logX_trans[i])
     
-    X_trans = np.zeros(X.shape, dtype = X.dtype)
-    for i in range(n):
-        X_trans[i] = man.exp(FM, logX_trans[i])
-    
-    var_ratio = np.sum(stds[0:m]**2)/np.sum(stds**2)
-    return var_ratio, X_trans
+    #var_ratio = np.sum(stds[0:m]**2)/np.sum(stds**2)
+    #return var_ratio, X_trans
+    return cpca
 
 def sPGA_complex(X, y, kernel_y, m, man):
     """

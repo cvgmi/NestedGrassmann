@@ -27,12 +27,95 @@ def dist_proj(X, Y):
         return torch.sqrt(torch.sum(torch.matmul(P,P.conj().t()))).real/np.sqrt(2)
     else:
         return torch.norm(Px - Py)/np.sqrt(2)
+    
+def ortho_complement(A):
+    # A is a n x p real- or complex-valued matrix such that A^HA = I, p < n
+    # return an n x (n-p) matrix A_perp such that [A A_perp] is orthogonal
+    n, p = A.shape
+    A_ext = np.eye(n)[:,0:(n-p)]
+    tmp = np.hstack((A, A_ext))
+    q, _ = np.linalg.qr(tmp)
+    return(q[:,p:n])
+    
+    
+def affnity_matrix(dist_m, y, v_w, v_b):
+    N = dist_m.shape[0]
+    affinity = np.eye(N)
+
+    for i in range(N):
+        for j in range(i):
+            tmp1 = np.argsort(dist_m[i, y == y[i]])[v_w]
+            tmp2 = np.argsort(dist_m[j, y == y[j]])[v_w]
+            g_w = np.int((y[i] == y[j]) and (dist_m[i, j] < np.maximum(tmp1, tmp2)))
+            tmp1 = np.argsort(dist_m[i, y != y[i]])[v_b-1]
+            tmp2 = np.argsort(dist_m[j, y != y[j]])[v_b-1]
+            g_b = np.int((y[i] != y[j]) and (dist_m[i, j] < np.maximum(tmp1, tmp2)))
+            affinity[i, j] = g_w - g_b
+            affinity[j, i] = affinity[i, j]
+    
+    return affinity
+    
+def NG_dr1(X, verbosity = 0):
+    """
+    X: array of N points on Gr(n, p); N x n x p array
+    aim to represent X by X_hat (N points on Gr(n-1, p)) 
+    where X_hat_i = A^T X_i, A \in St(n, n-1)
+    minimizing the projection error (using projection F-norm)
+    """
+    N, n, p = X.shape
+    cpx = np.iscomplex(X).any() # true if X is complex-valued
+
+    if cpx:
+        man = Product([ComplexGrassmann(n, 1), Euclidean(p, 2)])
+        
+    else:
+        man = Product([Grassmann(n, 1), Euclidean(p)])
+    
+    X_ = torch.from_numpy(X)
+    
+    @pymanopt.function.PyTorch
+    def cost(v, b):
+        vvT = torch.matmul(v, v.conj().t()) # n x n
+        if cpx:
+            b_ = b[:,0] + b[:,1]*1j
+            b_ = torch.unsqueeze(b_, axis=1)
+        else:
+            b_ = torch.unsqueeze(b, axis=1)
+        vbt = torch.matmul(v, b_.t()) # n x p
+        IvvT = torch.eye(n, dtype=X_.dtype) - vvT
+        d2 = 0
+        for i in range(N):
+            d2 = d2 + dist_proj(X_[i], torch.matmul(IvvT, X_[i]) + vbt)**2/N
+            #d2 = d2 + dist_proj(X_[i], torch.matmul(AAT, X_[i]))**2/N
+        return d2
+    
+    solver = SteepestDescent()
+    problem = Problem(manifold=man, cost=cost, verbosity=verbosity)
+    theta = solver.solve(problem)
+    v = theta[0]
+    b_ = theta[1]
+    
+    if cpx:
+        b = b_[:,0] + b_[:,1]*1j
+        b = np.expand_dims(b, axis=1)
+    else:
+        b = np.expand_dims(b_, axis=1)
+    
+    R = ortho_complement(v)
+
+    #tmp = np.array([A.T for i in range(N)])
+    tmp = np.array([R.conj().T for i in range(N)])
+    X_low = multiprod(tmp, X)
+    X_low = np.array([qr(X_low[i])[0] for i in range(N)])
+
+    return X_low, R, v, b
+    
 
 def NG_dr(X, m, verbosity=0, *args, **kwargs):
     """
     X: array of N points on Gr(n, p); N x n x p array
     aim to represent X by X_hat (N points on Gr(m, p), m < n) 
-    where X_hat_i = R^T X_i, W \in St(n, m)
+    where X_hat_i = R^T X_i, R \in St(n, m)
     minimizing the projection error (using projection F-norm)
     """
     N, n, p = X.shape
@@ -57,9 +140,11 @@ def NG_dr(X, m, verbosity=0, *args, **kwargs):
         d2 = 0
         for i in range(N):
             d2 = d2 + dist_proj(X_[i], torch.matmul(AAT, X_[i]) + IAATB)**2/N
+            #d2 = d2 + dist_proj(X_[i], torch.matmul(AAT, X_[i]))**2/N
         return d2
 
-    solver = ConjugateGradient()
+    #solver = ConjugateGradient()
+    solver = SteepestDescent()
     problem = Problem(manifold=man, cost=cost, verbosity=verbosity)
     theta = solver.solve(problem)
     A = theta[0]
@@ -103,18 +188,8 @@ def NG_sdr(X, y, m, v_w = 5, v_b = 5, verbosity=0, *args, **kwargs):
             dist_m[j, i] = dist_m[i, j]
     
     # affinity matrix
-    affinity = np.eye(N)
+    affinity = affinity_matrix(dist_m, y, v_w, v_b)
 
-    for i in range(N):
-        for j in range(i):
-            tmp1 = np.argsort(dist_m[i, y == y[i]])[v_w]
-            tmp2 = np.argsort(dist_m[j, y == y[j]])[v_w]
-            g_w = np.int((y[i] == y[j]) and (dist_m[i, j] < np.maximum(tmp1, tmp2)))
-            tmp1 = np.argsort(dist_m[i, y != y[i]])[v_b-1]
-            tmp2 = np.argsort(dist_m[j, y != y[j]])[v_b-1]
-            g_b = np.int((y[i] != y[j]) and (dist_m[i, j] < np.maximum(tmp1, tmp2)))
-            affinity[i, j] = g_w - g_b
-            affinity[j, i] = affinity[i, j]
             
     X_ = torch.from_numpy(X)
     affinity_ = torch.from_numpy(affinity)
@@ -132,7 +207,7 @@ def NG_sdr(X, y, m, v_w = 5, v_b = 5, verbosity=0, *args, **kwargs):
         return d2
 
     # solver = ConjugateGradient()
-    solver = ConjugateGradient()
+    solver = SteepestDescent()
     problem = Problem(manifold=man, cost=cost, verbosity=verbosity)
     A = solver.solve(problem)
 
@@ -283,38 +358,5 @@ def DR_geod_complex(X, m, verbosity=0):
     v_hat = var(Cgr_low, X_low, M_hat)/N
     var_ratio = v_hat/v
     return var_ratio, X_low, Q_proj
-
-
-def pairmean(self, X, Y):
-    return self.exp(X, self.log(X, Y)/2)
-
-Grassmann.pairmean = pairmean
-ComplexGrassmann.pairmean = pairmean
-    
-
-
-
-if __name__ == '__main__':
-    N = 100
-    n = 4
-    m = 2
-    p = 1
-    sig = 0.01
-    gr = Grassmann(n, p)
-    W, X = data_gen(N, n, m, p, sig)
-    # P_W = np.matmul(W, W.T)
-    M, v = compute_centroid(gr, X)
-    Q_proj = DR_proj(X, m)
-    # P_proj = np.matmul(Q_proj, Q_proj.T)
-    Q_geod = DR_geod(X, m)
-    # P_geod = np.matmul(Q_geod, Q_geod.T)
-    tmp = np.array([Q_proj.T for i in range(N)])
-    X_hat = multiprod(tmp, X)
-
-    gr_hat = Grassmann(m, p)
-    M_hat, v_hat = compute_centroid(gr_hat, X_hat)
-    gr_map = Grassmann(n, m)
-    print(gr_map.dist(W, Q_proj))
-    print(gr_map.dist(W, Q_geod))
 
     
