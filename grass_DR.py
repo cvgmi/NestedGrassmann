@@ -9,8 +9,11 @@ from numpy import log, sqrt
 from pymanopt import Problem
 from pymanopt.tools.multi import multiprod, multitransp, multihconj
 from compute_centroid import *
+from multi_torch import *
 from pymanopt.solvers import SteepestDescent, ConjugateGradient
 import torch
+
+
 
 def var(man, X, M):
     d = 0
@@ -27,6 +30,12 @@ def dist_proj(X, Y):
         return torch.sqrt(torch.sum(torch.matmul(P,P.conj().t()))).real/np.sqrt(2)
     else:
         return torch.norm(Px - Py)/np.sqrt(2)
+    
+def dist_geod(X, Y):
+    u, s, v = torch.linalg.svd(multiprod_torch(multitransp_torch(X), Y))
+    #s[s > 1] = 1
+    s = torch.arccos(s)
+    return torch.linalg.norm(s)
     
 def ortho_complement(A):
     # A is a n x p real- or complex-valued matrix such that A^HA = I, p < n
@@ -102,8 +111,6 @@ def NG_dr1(X, verbosity = 0):
         b = np.expand_dims(b_, axis=1)
     
     R = ortho_complement(v)
-
-    #tmp = np.array([A.T for i in range(N)])
     tmp = np.array([R.conj().T for i in range(N)])
     X_low = multiprod(tmp, X)
     X_low = np.array([qr(X_low[i])[0] for i in range(N)])
@@ -219,7 +226,7 @@ def NG_sdr(X, y, m, v_w = 5, v_b = 5, verbosity=0, *args, **kwargs):
 
 
 
-def DR_geod(X, m, verbosity=0):
+def NG_dr_geod(X, m, verbosity=0):
     """ 
     X: array of N points on Gr(n, p); N x n x p array
     aim to represent X by X_hat (N points on Gr(m, p), m < n) 
@@ -227,69 +234,47 @@ def DR_geod(X, m, verbosity=0):
     minimizing the projection error (using geodesic distance)
     """
     N, n, p = X.shape
-    
-    gr = Grassmann(n, p)
-    FM_all = compute_centroid(gr, X)
-    v = var(gr, X, FM_all)/N
-    
-    gr = Grassmann(n, p, N)
-    gr_low = Grassmann(m, p)
-    gr_map = Grassmann(n, m) # n x m
-    XXT = multiprod(X, multitransp(X)) # N x n x n
-    
-    @pymanopt.function.Callable
-    def cost(Q):
-        tmp = np.array([np.matmul(Q, Q.T) for i in range(N)]) # N x n x n
-        new_X = multiprod(tmp, X) # N x n x p
-        q = np.array([qr(new_X[i])[0] for i in range(N)])
-        d2 = gr.dist(X, q)**2
-        return d2/N
-    
-    @pymanopt.function.Callable
-    def egrad(Q):
-        """
-        need to be fixed
-        """
-        QQ = np.matmul(Q, Q.T)
-        tmp = np.array([QQ for i in range(N)])
-        XQQX = multiprod(multiprod(multitransp(X), tmp), X)
-        lam, V = np.linalg.eigh(XQQX)
-        theta = np.arccos(np.minimum(np.sqrt(lam), 1-1e-5))
-        d = -2*theta/(np.cos(theta)*np.sin(theta))
-        Sig = np.array([np.diag(dd) for dd in d])
-        XV = multiprod(X,V)
-        eg = multiprod(XV, multiprod(Sig, multitransp(XV)))
-        eg = np.mean(eg, axis = 0)
-        eg = np.matmul(eg, Q)
-        return eg
+    cpx = np.iscomplex(X).any() # true if X is complex-valued
 
-    def egrad_num(R, eps = 1e-8):
-        """
-        compute egrad numerically
-        """
-        g = np.zeros(R.shape)
-        for i in range(n):
-            for j in range(m):
-                R1 = R.copy()
-                R2 = R.copy()
-                R1[i,j] += eps
-                R2[i,j] -= eps
-                g[i,j] = (cost(R1) - cost(R2))/(2*eps)
-        return g
+    if cpx:
+        man = Product([ComplexGrassmann(n, m), Euclidean(n, p, 2)])
+        
+    else:
+        man = Product([Grassmann(n, m), Euclidean(n, p)])
+    
+    X_ = torch.from_numpy(X)
+    
+    @pymanopt.function.PyTorch
+    def cost(A, B):
+        AAT = torch.matmul(A, A.conj().t()) # n x n
+        if cpx:
+            B_ = B[:,:,0] + B[:,:,1]*1j
+        else:
+            B_ = B
+        IAATB = torch.matmul(torch.eye(n, dtype=X_.dtype) - AAT, B_) # n x p
+        d2 = 0
+        for i in range(N):
+            d2 = d2 + dist_geod(X_[i], torch.linalg.qr(torch.matmul(AAT, X_[i]) + IAATB)[0])**2/N
+        return d2
 
     # solver = ConjugateGradient()
     solver = SteepestDescent()
-    problem = Problem(manifold=gr_map, cost=cost, egrad=egrad, verbosity=verbosity)
-    Q_proj = solver.solve(problem)
+    problem = Problem(manifold=man, cost=cost, verbosity=verbosity)
+    theta = solver.solve(problem)
+    A = theta[0]
+    B = theta[1]
+    
+    if cpx:
+        B_ = B[:,:,0] + B[:,:,1]*1j
+    else:
+        B_ = B
 
-    tmp = np.array([Q_proj.T for i in range(N)])
+    #tmp = np.array([A.T for i in range(N)])
+    tmp = np.array([A.conj().T for i in range(N)])
     X_low = multiprod(tmp, X)
-    X_low = X_low/np.expand_dims(np.linalg.norm(X_low, axis=1), axis = 2)
+    X_low = np.array([qr(X_low[i])[0] for i in range(N)])
 
-    M_hat = compute_centroid(gr_low, X_low)
-    v_hat = var(gr_low, X_low, M_hat)/N
-    var_ratio = v_hat/v
-    return var_ratio, X_low, Q_proj
+    return X_low, A, B_
 
 
 def DR_geod_complex(X, m, verbosity=0):

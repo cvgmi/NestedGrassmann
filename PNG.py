@@ -43,7 +43,7 @@ def PNG(X, log=True, verbosity = 1):
         
         for j in range(N):
             scores[j,((n-i-1)*p):(n-i)*p] = gr.dist(X_old[j], X_new_embedded[j]) * \
-            np.matmul(X_old[j].conj().transpose(), A_perp)
+            np.matmul(X_old[j].conj().transpose(), A_perp)[:,0]
 
         X_old = X_new
         

@@ -1,0 +1,38 @@
+---
+title: "PNSS examples"
+output: html_notebook
+---
+
+
+```{r, message=FALSE, results='hide', fig.show='hide'}
+options(rgl.useNULL = TRUE)
+library(rgl)
+library(shapes)
+```
+## Digit3 dataset
+```{r, message=FALSE, results='hide', fig.show='hide'}
+n.pc <- 10
+plotshapes(digit3.dat[,,4], joinline = 1:13)
+out <- pnss3d(digit3.dat, n.pc = n.pc)
+```
+```{r}
+round(out$percent, 4)
+```
+## Female Gorilla dataset
+```{r, message=FALSE, results='hide', fig.show='hide'}
+plotshapes(gorf.dat,joinline=c(1,6,7,8,2,3,4,5,1))
+out <- pnss3d(gorf.dat, n.pc = n.pc)
+```
+```{r}
+round(out$percent, 4)
+```
+
+## Male Gorilla dataset
+```{r, message=FALSE, results='hide', fig.show='hide'}
+out <- pnss3d(gorm.dat, n.pc = n.pc)
+```
+```{r}
+round(out$percent, 4)
+```
+
+
