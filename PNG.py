@@ -102,7 +102,7 @@ def PNG(X, log=True, verbosity = 1):
 
     return scores[:,::-1]
 
-def SPNG(X, y, log = True):
+def SPNG(X, y, log = True, verbosity = 1):
     # Assuming X consists of N points on Gr(p, n), p < n
     # options:
     #     y: label of X; assumed to be {1,...,k}
@@ -119,7 +119,7 @@ def SPNG(X, y, log = True):
         if log:
             print(f'Gr({p}, {i+1}) -> Gr({p}, {i})')
         
-        X_new, A = NG_sdr(X_old, y, i)    
+        X_new, A = NG_sdr(X_old, y, i, verbosity)    
         A_perp = ortho_complement(A)[:,0]
         X_new_embedded = np.array([np.linalg.qr(np.matmul(A, X_new[i]))[0] for i in range(N)])
             
@@ -151,7 +151,7 @@ def SPNG(X, y, log = True):
             if log:
                 print(f'Gr(1, {i+1}) -> Gr(1, {i})')   
 
-            X_new, A = NG_sdr(X_old, y, i)
+            X_new, A = NG_sdr(X_old, y, i, verbosity)
             A_perp = ortho_complement(A)[:,0]
             X_new_embedded = np.array([np.linalg.qr(np.matmul(A, X_new[i]))[0] for i in range(N)])
 

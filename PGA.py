@@ -61,7 +61,7 @@ def Complex_PGA(X, m, man):
         logX[i] = man.log(FM, X[i]).reshape(-1)
         
     cpca = Complex_PCA(n_components=m)
-    cpca.fit(logX)
+    X_trans = cpca.fit_transform(logX)
     #logX_trans = cpca.inverse_transform(logX_trans)
     #logX_trans = logX_trans.reshape(X.shape)
     
@@ -71,9 +71,9 @@ def Complex_PGA(X, m, man):
     
     #var_ratio = np.sum(stds[0:m]**2)/np.sum(stds**2)
     #return var_ratio, X_trans
-    return cpca
+    return cpca, X_trans
 
-def sPGA_complex(X, y, kernel_y, m, man):
+def sPGA_complex(X, y, m, man):
     """
     tangent supervised PCA for complex manifold
     """
@@ -104,11 +104,11 @@ def sPGA_complex(X, y, kernel_y, m, man):
 
     
     logX_trans = np.matmul(np.matmul(logX, pcs[0:m].T), pcs[0:m])
-    logX_trans = logX_trans.reshape(X.shape)
+    #logX_trans = logX_trans.reshape(X.shape)
     
-    X_trans = np.zeros(X.shape, dtype = X.dtype)
-    for i in range(n):
-        X_trans[i] = man.exp(FM, logX_trans[i])
+    #X_trans = np.zeros(X.shape, dtype = X.dtype)
+    #for i in range(n):
+    #    X_trans[i] = man.exp(FM, logX_trans[i])
     
     var_ratio = np.sum(lambdas[0:m])/np.sum(lambdas)
-    return var_ratio, X_trans
+    return var_ratio, logX_trans

@@ -47,7 +47,7 @@ def ortho_complement(A):
     return(q[:,p:n])
     
     
-def affnity_matrix(dist_m, y, v_w, v_b):
+def affinity_matrix(dist_m, y, v_w, v_b):
     N = dist_m.shape[0]
     affinity = np.eye(N)
 

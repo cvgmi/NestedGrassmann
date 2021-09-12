@@ -19,8 +19,15 @@ class Complex_PCA:
         self.explained_variance_ = explained_variance_[:self.n_components]
         self.explained_variance_ratio_ = explained_variance_ratio_[:self.n_components]
         
-    def transform(self):
-        pass
+    def transform(self, X):
+        if self.mean_ is not None:
+            X = X - self.mean_
+        X_transformed = np.dot(X, self.components_.conj().T)
+        return X_transformed
     
-    def fit_transform(self):
-        pass
+    def fit_transform(self, X):
+        self.fit(X)
+        return self.transform(X)
+    
+    
+    

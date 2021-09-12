@@ -108,7 +108,7 @@ class SPCA(BaseEstimator, TransformerMixin):
         return
 
 
-    def fit_and_transform(self, X, Y):
+    def fit_transform(self, X, Y):
         self.fit(X, Y)
         return self._transform()
     
