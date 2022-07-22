@@ -8,6 +8,8 @@ the algorithm, and some experiments showing the performance of this model.
 Chun-Hao Yang and Baba C. Vemuri (2021), *Nested Grassmanns for Dimensionality
 Reduction with Applications to Shape Analysis* in Proceedings of the International Conference on Information Processing in Medical Imaging, 2021, June 28-30, Bornholm, Denmark, pages 136-149.
 
+Yang, C. H., & Vemuri, B. C. (2022). *Nested Grassmannians for Dimensionality Reduction with Applications.* Machine Learning for Biomedical Imaging, 1(IPMI 2021 special issue), 1-10.
+
 This software was developed as part of research in part funded by NSF IIS-1724174 to Baba C. Vemuri, Department of CISE, Univ. of Florida.
 
 ## Dependencies
