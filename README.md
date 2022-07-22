@@ -10,7 +10,7 @@ Reduction with Applications to Shape Analysis* in Proceedings of the Internation
 
 Yang, C. H., & Vemuri, B. C. (2022). *Nested Grassmannians for Dimensionality Reduction with Applications.* Machine Learning for Biomedical Imaging, 1(IPMI 2021 special issue), 1-10.
 
-This software was developed as part of research in part funded by NSF IIS-1724174 to Baba C. Vemuri, Department of CISE, Univ. of Florida.
+This software was developed as part of research in part funded by the NSF grant IIS-1724174, the NIH NINDS and NIA via R01NS121099 to Vemuri and the MOST grant 110-2118-M-002-005-MY3 to Yang.
 
 ## Dependencies
 
