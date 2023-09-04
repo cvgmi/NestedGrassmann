@@ -1,4 +1,4 @@
-from compute_centroid import *
+from pymanopt.optimizers.nelder_mead import compute_centroid
 import numpy as np
 from sklearn.decomposition import PCA
 from sPCA import *

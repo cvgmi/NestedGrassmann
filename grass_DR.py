@@ -6,11 +6,12 @@ import numpy as np
 from numpy.linalg import inv, det, qr, norm, svd
 from scipy.linalg import logm, expm, sqrtm
 from numpy import log, sqrt
+import pymanopt
 from pymanopt import Problem
-from pymanopt.tools.multi import multiprod, multitransp, multihconj
-from compute_centroid import *
+from pymanopt.tools.multi import multitransp, multihconj
+from pymanopt.optimizers.nelder_mead import compute_centroid
 from multi_torch import *
-from pymanopt.solvers import SteepestDescent, ConjugateGradient
+from pymanopt.optimizers import SteepestDescent, ConjugateGradient
 import torch
 
 
@@ -82,7 +83,7 @@ def NG_dr1(X, verbosity = 0):
     
     X_ = torch.from_numpy(X)
     
-    @pymanopt.function.PyTorch
+    @pymanopt.function.pytorch(man)
     def cost(v, b):
         vvT = torch.matmul(v, v.conj().t()) # n x n
         if cpx:
@@ -98,11 +99,11 @@ def NG_dr1(X, verbosity = 0):
             #d2 = d2 + dist_proj(X_[i], torch.matmul(AAT, X_[i]))**2/N
         return d2
     
-    solver = SteepestDescent()
-    problem = Problem(manifold=man, cost=cost, verbosity=verbosity)
-    theta = solver.solve(problem)
-    v = theta[0]
-    b_ = theta[1]
+    solver = SteepestDescent(verbosity = verbosity)
+    problem = Problem(manifold=man, cost=cost)
+    theta = solver.run(problem)
+    v = theta.point[0]
+    b_ = theta.point[1]
     
     if cpx:
         b = b_[:,0] + b_[:,1]*1j
@@ -112,7 +113,7 @@ def NG_dr1(X, verbosity = 0):
     
     R = ortho_complement(v)
     tmp = np.array([R.conj().T for i in range(N)])
-    X_low = multiprod(tmp, X)
+    X_low = tmp @ X
     X_low = np.array([qr(X_low[i])[0] for i in range(N)])
 
     return X_low, R, v, b
@@ -136,7 +137,7 @@ def NG_dr(X, m, verbosity=0, *args, **kwargs):
     
     X_ = torch.from_numpy(X)
     
-    @pymanopt.function.PyTorch
+    @pymanopt.function.pytorch(man)
     def cost(A, B):
         AAT = torch.matmul(A, A.conj().t()) # n x n
         if cpx:
@@ -151,11 +152,11 @@ def NG_dr(X, m, verbosity=0, *args, **kwargs):
         return d2
 
     #solver = ConjugateGradient()
-    solver = SteepestDescent()
-    problem = Problem(manifold=man, cost=cost, verbosity=verbosity)
-    theta = solver.solve(problem)
-    A = theta[0]
-    B = theta[1]
+    solver = SteepestDescent(verbosity = verbosity)
+    problem = Problem(manifold=man, cost=cost)
+    theta = solver.run(problem)
+    A = theta.point[0]
+    B = theta.point[1]
     
     if cpx:
         B_ = B[:,:,0] + B[:,:,1]*1j
@@ -164,7 +165,7 @@ def NG_dr(X, m, verbosity=0, *args, **kwargs):
 
     #tmp = np.array([A.T for i in range(N)])
     tmp = np.array([A.conj().T for i in range(N)])
-    X_low = multiprod(tmp, X)
+    X_low = tmp @ X
     X_low = np.array([qr(X_low[i])[0] for i in range(N)])
 
     return X_low, A, B_
@@ -201,7 +202,7 @@ def NG_sdr(X, y, m, v_w = 5, v_b = 5, verbosity=0, *args, **kwargs):
     X_ = torch.from_numpy(X)
     affinity_ = torch.from_numpy(affinity)
     
-    @pymanopt.function.PyTorch
+    @pymanopt.function.pytorch(man)
     def cost(A):
         dm = torch.zeros((N, N))
         for i in range(N):
@@ -214,12 +215,12 @@ def NG_sdr(X, y, m, v_w = 5, v_b = 5, verbosity=0, *args, **kwargs):
         return d2
 
     # solver = ConjugateGradient()
-    solver = SteepestDescent()
-    problem = Problem(manifold=man, cost=cost, verbosity=verbosity)
-    A = solver.solve(problem)
+    solver = SteepestDescent(verbosity = verbosity)
+    problem = Problem(manifold=man, cost=cost)
+    A = solver.run(problem)
 
-    tmp = np.array([A.conj().T for i in range(N)]) # N x m x n
-    X_low = multiprod(tmp, X) # N x m x p
+    tmp = np.array([A.point.conj().T for i in range(N)]) # N x m x n
+    X_low = tmp @ X # N x m x p
     X_low = np.array([qr(X_low[i])[0] for i in range(N)])
     
     return X_low, A
@@ -244,7 +245,7 @@ def NG_dr_geod(X, m, verbosity=0):
     
     X_ = torch.from_numpy(X)
     
-    @pymanopt.function.PyTorch
+    @pymanopt.function.pytorch(man)
     def cost(A, B):
         AAT = torch.matmul(A, A.conj().t()) # n x n
         if cpx:
@@ -258,11 +259,11 @@ def NG_dr_geod(X, m, verbosity=0):
         return d2
 
     # solver = ConjugateGradient()
-    solver = SteepestDescent()
-    problem = Problem(manifold=man, cost=cost, verbosity=verbosity)
-    theta = solver.solve(problem)
-    A = theta[0]
-    B = theta[1]
+    solver = SteepestDescent(verbosity = verbosity)
+    problem = Problem(manifold=man, cost=cost)
+    theta = solver.run(problem)
+    A = theta.point[0]
+    B = theta.point[1]
     
     if cpx:
         B_ = B[:,:,0] + B[:,:,1]*1j
@@ -271,7 +272,7 @@ def NG_dr_geod(X, m, verbosity=0):
 
     #tmp = np.array([A.T for i in range(N)])
     tmp = np.array([A.conj().T for i in range(N)])
-    X_low = multiprod(tmp, X)
+    X_low = tmp @ X 
     X_low = np.array([qr(X_low[i])[0] for i in range(N)])
 
     return X_low, A, B_
@@ -288,12 +289,12 @@ def DR_geod_complex(X, m, verbosity=0):
     Cgr = ComplexGrassmann(n, p, N)
     Cgr_low = Grassmann(m, p)
     Cgr_map = ComplexGrassmann(n, m) # n x m
-    XXT = multiprod(X, multihconj(X))
+    XXT = X @ multihconj(X)
     
     @pymanopt.function.Callable
     def cost(Q):
         tmp = np.array([np.matmul(Q, Q.T) for i in range(N)]) # N x n x n
-        new_X = multiprod(tmp, X) # N x n x p
+        new_X = tmp @ X  # N x n x p
         q = np.array([qr(new_X[i])[0] for i in range(N)])
         d2 = Cgr.dist(X, q)**2
         return d2/N
@@ -305,13 +306,13 @@ def DR_geod_complex(X, m, verbosity=0):
         """
         QQ = np.matmul(Q, multihconj(Q))
         tmp = np.array([QQ for i in range(N)])
-        XQQX = multiprod(multiprod(multihconj(X), tmp), X)
+        XQQX = (multihconj(X) @ tmp) @ X
         lam, V = np.linalg.eigh(XQQX)
         theta = np.arccos(np.sqrt(lam))
         d = -2*theta/(np.cos(theta)*np.sin(theta))
         Sig = np.array([np.diag(dd) for dd in d])
-        XV = multiprod(X,V)
-        eg = multiprod(XV, multiprod(Sig, multitransp(XV.conj())))
+        XV = X @ V
+        eg = XV @ (Sig @ multitransp(XV.conj()))
         eg = np.mean(eg, axis = 0)
         eg = np.matmul(eg, Q)
         return eg
@@ -332,16 +333,16 @@ def DR_geod_complex(X, m, verbosity=0):
 
     # solver = ConjugateGradient()
     solver = SteepestDescent()
-    problem = Problem(manifold=Cst, cost=cost, egrad=egrad, verbosity=verbosity)
-    Q_proj = solver.solve(problem)
+    problem = Problem(manifold=Cst, cost=cost, egrad=egrad)
+    Q_proj = solver.run(problem)
 
-    tmp = np.array([multihconj(Q_proj) for i in range(N)])
-    X_low = multiprod(tmp, X)
+    tmp = np.array([multihconj(Q_proj.point) for i in range(N)])
+    X_low = tmp @ X
     X_low = X_low/np.expand_dims(np.linalg.norm(X_low, axis=1), axis = 2)
 
     M_hat = compute_centroid(Cgr_low, X_low)
     v_hat = var(Cgr_low, X_low, M_hat)/N
     var_ratio = v_hat/v
-    return var_ratio, X_low, Q_proj
+    return var_ratio, X_low, Q_proj.point
 
     

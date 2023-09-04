@@ -3,7 +3,7 @@ Principal Nested Grassmanns
 """
 from pymanopt.manifolds import Grassmann, ComplexGrassmann
 import numpy as np
-from compute_centroid import *
+from pymanopt.optimizers.nelder_mead import compute_centroid
 from grass_DR import *
 from sklearn.decomposition import PCA
 
@@ -201,14 +201,14 @@ if __name__ == '__main__':
     gr = Grassmann(n, p, N)
     gr_map = Grassmann(n, m)
 
-    X_low = gr_low.rand() # N x m x p
-    A = gr_map.rand() # n x m
+    X_low = gr_low.random_point() # N x m x p
+    A = gr_map.random_point() # n x m
     #B = np.random.normal(0, 0.1, (n, p)) # n x p
     B = np.zeros((n,p))
     AAT = np.matmul(A, A.T) 
     IAATB = np.matmul(np.eye(n) - AAT, B)
     X = np.array([np.linalg.qr(np.matmul(A, X_low[i]) + IAATB)[0] for i in range(N)]) # N x n x p
-    X = gr.exp(X, sig * gr.randvec(X)) # perturb the emdedded X
+    X = gr.exp(X, sig * gr.random_tangent_vector(X)) # perturb the emdedded X
     
     scores = PNG(X, log = True)
     
